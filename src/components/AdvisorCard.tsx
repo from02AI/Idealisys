@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { AdvisorPersona } from '../types';
 import { Button } from '@/components/ui/button';
@@ -42,14 +41,16 @@ const AdvisorCard: React.FC<AdvisorCardProps> = ({ advisor, onSelect }) => {
   };
 
   return (
-    <Card className="p-6 text-center hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer group">
-      {getAvatarIcon(advisor.id)}
-      <h3 className="text-xl font-semibold text-gray-800 mb-2">{advisor.name}</h3>
-      <p className="text-gray-600 mb-4 text-sm">{advisor.tagline}</p>
-      <p className="text-gray-500 text-xs mb-6 leading-relaxed">{advisor.description}</p>
+    <Card className="bg-white rounded-lg shadow-md p-4 flex flex-col items-center text-center hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer group">
+      <div className="mb-2">
+        {getAvatarIcon(advisor.id)}
+      </div>
+      <h3 className="text-lg font-bold text-gray-800 mb-1">{advisor.name}</h3>
+      <p className="text-sm text-gray-600 mb-2">{advisor.tagline}</p>
+      <p className="text-xs text-gray-500 mb-4">{advisor.description}</p>
       <Button 
         onClick={() => onSelect(advisor)}
-        className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white transition-all duration-200"
+        className="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition-colors text-sm"
       >
         Select
       </Button>
