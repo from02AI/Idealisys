@@ -43,7 +43,7 @@ const MentorModal: React.FC<Props> = ({ open, onClose, onSelect }) => {
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6">
         <h2 className="text-xl font-semibold mb-4">Choose your mentor</h2>
 
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[calc(100vh-250px)] overflow-y-auto pr-2">
           {MENTORS.map((m) => (
             <button
               key={m.id}
