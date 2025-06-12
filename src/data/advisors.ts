@@ -1,26 +1,26 @@
-
 import { AdvisorPersona } from '../types';
 
-export const advisors: AdvisorPersona[] = [
+export const ADVISOR_PERSONAS: AdvisorPersona[] = [
   {
     id: 'supporter',
-    name: 'The Supporter',
-    tagline: 'A warm, encouraging voice',
-    description: 'Believes in your vision and helps you see the possibilities',
-    tone: 'warm, encouraging, optimistic, focuses on strengths and potential'
+    title: 'The Supporter',
+    subtitle: 'Warm, encouraging voice',
+    tone: 'encouraging',
   },
   {
     id: 'strategist',
-    name: 'The Strategist',
-    tagline: 'A balanced, logical guide',
-    description: 'Provides thoughtful analysis with practical wisdom',
-    tone: 'balanced, analytical yet supportive, focuses on practical steps and realistic planning'
+    title: 'The Strategist',
+    subtitle: 'Balanced, logical guide',
+    tone: 'logical',
   },
   {
     id: 'challenger',
-    name: 'The Challenger',
-    tagline: 'A direct, analytical thinker',
-    description: 'Asks the tough questions to strengthen your idea',
-    tone: 'direct, analytical, constructively critical, focuses on potential weaknesses and market realities'
-  }
+    title: 'The Challenger',
+    subtitle: 'Direct, analytical thinker',
+    tone: 'direct',
+  },
 ];
+
+export const getAdvisorById = (id: AdvisorPersona['id']): AdvisorPersona | undefined => {
+  return ADVISOR_PERSONAS.find(a => a.id === id);
+};
