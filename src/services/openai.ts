@@ -17,10 +17,10 @@ export async function generateQuestionOptions(
   if (!OPENAI_API_KEY) {
     // Return mock data if no API key
     return [
-      "Option 1: Mock suggestion for testing",
-      "Option 2: Another mock suggestion",
-      "Option 3: Third mock suggestion",
-      "Option 4: Fourth mock suggestion"
+      "Mock suggestion for testing",
+      "Another mock suggestion",
+      "Third mock suggestion",
+      "Fourth mock suggestion"
     ];
   }
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import QuestionScreen from './QuestionScreen';
+import Question1Screen from './Question1Screen'; // Import the new component
 import { Question, AdvisorPersona } from '../types';
 import { getQuestionById, QUESTIONS } from '../data/questions'; // Import QUESTIONS array for total steps
 import { getAdvisorById } from '../data/advisors';
@@ -114,15 +115,29 @@ const QuestionFlowContainer: React.FC = () => {
   }
 
   return (
-    <QuestionScreen
-      question={question}
-      currentStep={currentStep}
-      totalSteps={totalSteps}
-      advisor={advisor}
-      userIdea={initialUserIdea} // Pass the user idea
-      onAnswer={handleAnswer}
-      onBack={handleBack}
-    />
+    <> {/* Use a React Fragment to conditionally render */}
+      {currentStep === 1 ? (
+        <Question1Screen
+          question={question}
+          currentStep={currentStep}
+          totalSteps={totalSteps}
+          advisor={advisor}
+          userIdea={initialUserIdea}
+          onAnswer={handleAnswer}
+          onBack={handleBack}
+        />
+      ) : (
+        <QuestionScreen
+          question={question}
+          currentStep={currentStep}
+          totalSteps={totalSteps}
+          advisor={advisor}
+          userIdea={initialUserIdea}
+          onAnswer={handleAnswer}
+          onBack={handleBack}
+        />
+      )}
+    </>
   );
 };
 
