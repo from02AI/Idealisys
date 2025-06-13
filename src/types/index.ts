@@ -1,4 +1,3 @@
-
 export interface AdvisorPersona {
   id: string;
   name: string;
@@ -10,7 +9,8 @@ export interface AdvisorPersona {
 export interface Question {
   id: number;
   text: string;
-  prompt: string;
+  inputType: string;
+  prompt?: string;
 }
 
 export interface UserAnswer {

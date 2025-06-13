@@ -16,12 +16,16 @@ interface OpenAIResponse {
   }>;
 }
 
-// Global SYSTEM_PROMPT as specified by the new strategy
+// NOTE: The global SYSTEM_PROMPT below is now OBSOLETE based on our new strategy.
+// It is kept here commented out for reference, but it will no longer be directly used in generateQuestionOptions.
+/*
 const SYSTEM_PROMPT = `You are Solivra, a concise startup mentor. Always output exactly three re-phrasings of the user's idea, each as a single sentence of 25 words or fewer. Every sentence must begin with a capital letter, mention the core problem and who faces it, and end with a period. Do NOT add bullet points, numbers, emojis, or extra commentary. Respond as valid JSON: { "options": ["…", "…", "…"] }.`;
+*/
 
 export async function generateQuestionOptions(
   userIdea: string,
-  screenSpecificUserPrompt: string // New parameter for screen-specific user prompt
+  // Removed 'screenSpecificUserPrompt' parameter, now receiving the full 'promptTemplate'
+  promptTemplate: string // This will be the question.prompt from data/questions.ts
 ): Promise<string[]> {
   if (!import.meta.env.VITE_OPENAI_API_KEY) {
     // Updated mock data for 3 options
@@ -33,6 +37,25 @@ export async function generateQuestionOptions(
   }
 
   try {
+    // 1. Split the template into SYSTEM and USER blocks
+    const [systemBlock, userBlockRaw] = promptTemplate.split("### USER");
+
+    if (!systemBlock || !userBlockRaw) {
+      throw new Error("Invalid prompt template format: Missing '### USER' separator.");
+    }
+
+    // 2. Replace the placeholder in the user block
+    const userContent = userBlockRaw.replace('{USER_IDEA}', userIdea).trim();
+    const systemContent = systemBlock.replace('### SYSTEM', '').trim(); // Remove '### SYSTEM' tag
+
+    // 3. (Debug) Log the actual messages being sent
+    const messages = [
+      { role: 'system', content: systemContent },
+      { role: 'user', content: userContent }
+    ];
+
+    console.log("→ API Request Messages:\n", JSON.stringify(messages, null, 2));
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -40,18 +63,17 @@ export async function generateQuestionOptions(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT }, // Use the global SYSTEM_PROMPT
-          { role: 'user',   content: screenSpecificUserPrompt } // Use the screen-specific user prompt
-        ],
+        model: 'gpt-3.5-turbo', // Changed to gpt-3.5-turbo for faster/cheaper testing
+        messages: messages, // Use the dynamically constructed messages
         temperature: 0.7,
         max_tokens: 120
       }),
     });
 
     if (!response.ok) {
-      throw new Error('OpenAI API request failed');
+      // Attempt to read error message from API response
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      throw new Error(`OpenAI API request failed: ${response.status} ${response.statusText} - ${errorData.message || 'No specific error message from API'}`);
     }
 
     const data: OpenAIResponse = await response.json();
@@ -61,12 +83,12 @@ export async function generateQuestionOptions(
       throw new Error('No content received from OpenAI');
     }
 
-    // Parse the JSON response expecting { "options": [...] }
+    // 5. Parse the JSON response expecting { "options": [...] }
     const result = JSON.parse(content);
     
     // Validate the parsed structure for exactly 3 options
     if (!result || !Array.isArray(result.options) || result.options.length !== 3) {
-      console.warn("Invalid response format from OpenAI, returning fallback options.", content);
+      console.warn("Invalid response format from OpenAI, returning fallback options. Raw content:", content);
       return [
         "Please provide more context for your idea.",
         "Consider elaborating on the core problem you're solving.",
@@ -75,8 +97,8 @@ export async function generateQuestionOptions(
     }
 
     return result.options; // Return the options array
-  } catch (error) {
-    console.error('Error generating question options:', error);
+  } catch (error: any) { // Type 'any' for error caught
+    console.error('Error generating question options:', error.message || error);
     // Updated fallback options for 3
     return [
       "Could you rephrase your idea to be more specific.",

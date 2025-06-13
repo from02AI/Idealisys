@@ -47,12 +47,9 @@ const Question1Screen: React.FC<QuestionScreenProps> = ({
     const loadOptions = async () => {
       setLoading(true);
       try {
-        // Construct the screen-specific user prompt for Question 1
-        const question1UserPrompt = `Raw idea text:\n"${userIdea}"`;
-
         const generatedOptions = await generateQuestionOptions(
-          userIdea,
-          question1UserPrompt // Pass the new screen-specific user prompt
+          trimmedAnswer,
+          question.prompt
         );
         setOptions(generatedOptions);
       } catch (error) {
@@ -71,7 +68,7 @@ const Question1Screen: React.FC<QuestionScreenProps> = ({
         setLoading(false);
     }
 
-  }, [question, advisor, userIdea, isValidInput, showAIOptions]); // Added isValidInput and showAIOptions to dependencies
+  }, [question.prompt, trimmedAnswer, isValidInput, showAIOptions]);
 
   const handleOptionSelect = (option: string) => {
     setSelectedOption(option);
