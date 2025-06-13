@@ -1,3 +1,12 @@
+import OpenAI from "openai";
+
+// Log the API key to the console during development
+console.log("OpenAI API Key:", import.meta.env.VITE_OPENAI_API_KEY ? "Loaded" : "Not Loaded");
+
+const openai = new OpenAI({
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true, // This is for client-side usage, remember to secure for production!
+});
 
 interface OpenAIResponse {
   choices: Array<{
@@ -7,20 +16,19 @@ interface OpenAIResponse {
   }>;
 }
 
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+// Global SYSTEM_PROMPT as specified by the new strategy
+const SYSTEM_PROMPT = `You are Solivra, a concise startup mentor. Always output exactly three re-phrasings of the user's idea, each as a single sentence of 25 words or fewer. Every sentence must begin with a capital letter, mention the core problem and who faces it, and end with a period. Do NOT add bullet points, numbers, emojis, or extra commentary. Respond as valid JSON: { "options": ["…", "…", "…"] }.`;
 
 export async function generateQuestionOptions(
   userIdea: string,
-  persona: string,
-  questionPrompt: string
+  screenSpecificUserPrompt: string // New parameter for screen-specific user prompt
 ): Promise<string[]> {
-  if (!OPENAI_API_KEY) {
-    // Return mock data if no API key
+  if (!import.meta.env.VITE_OPENAI_API_KEY) {
+    // Updated mock data for 3 options
     return [
-      "Mock suggestion for testing",
-      "Another mock suggestion",
-      "Third mock suggestion",
-      "Fourth mock suggestion"
+      "Mock rephrasing for testing purposes.",
+      "Another concise rephrasing example.",
+      "A third short rephrased idea."
     ];
   }
 
@@ -28,25 +36,17 @@ export async function generateQuestionOptions(
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-3.5-turbo',
         messages: [
-          {
-            role: 'system',
-            content: `You are ${persona}. ${questionPrompt} 
-            
-            Return exactly 4 options as a JSON array of strings. Each option should be concise (1-2 sentences max) and reflect your persona's tone. 
-            
-            User's idea: "${userIdea}"
-            
-            Format your response as a valid JSON array: ["option 1", "option 2", "option 3", "option 4"]`
-          }
+          { role: 'system', content: SYSTEM_PROMPT }, // Use the global SYSTEM_PROMPT
+          { role: 'user',   content: screenSpecificUserPrompt } // Use the screen-specific user prompt
         ],
         temperature: 0.7,
-        max_tokens: 500
+        max_tokens: 120
       }),
     });
 
@@ -61,22 +61,27 @@ export async function generateQuestionOptions(
       throw new Error('No content received from OpenAI');
     }
 
-    // Parse the JSON response
-    const options = JSON.parse(content);
+    // Parse the JSON response expecting { "options": [...] }
+    const result = JSON.parse(content);
     
-    if (!Array.isArray(options) || options.length !== 4) {
-      throw new Error('Invalid response format from OpenAI');
+    // Validate the parsed structure for exactly 3 options
+    if (!result || !Array.isArray(result.options) || result.options.length !== 3) {
+      console.warn("Invalid response format from OpenAI, returning fallback options.", content);
+      return [
+        "Please provide more context for your idea.",
+        "Consider elaborating on the core problem you're solving.",
+        "Who is the primary user for this solution?"
+      ];
     }
 
-    return options;
+    return result.options; // Return the options array
   } catch (error) {
     console.error('Error generating question options:', error);
-    // Return fallback options
+    // Updated fallback options for 3
     return [
-      "Let's explore this aspect of your idea",
-      "Consider this important factor",
-      "This could be a key element",
-      "Think about this perspective"
+      "Could you rephrase your idea to be more specific.",
+      "Think about the direct value your idea provides.",
+      "Focus on the main challenge this idea addresses."
     ];
   }
 }
@@ -92,7 +97,7 @@ export async function generateValidationReport(
   insights: string;
   nextSteps: string;
 }> {
-  if (!OPENAI_API_KEY) {
+  if (!import.meta.env.VITE_OPENAI_API_KEY) {
     // Return mock report if no API key
     return {
       ideaSummary: "Your idea shows promise and addresses a real market need with innovative approach.",
@@ -119,11 +124,11 @@ export async function generateValidationReport(
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-3.5-turbo',
         messages: [
           {
             role: 'system',
