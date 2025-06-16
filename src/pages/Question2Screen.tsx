@@ -23,7 +23,7 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
   onBack,
 }) => {
   const [selectedTab, setSelectedTab] = useState(1);
-  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<number | null>(null);
   const [customAudience, setCustomAudience] = useState('');
 
   const audienceOptions = {
@@ -33,7 +33,7 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
     },
     2: {
       emoji: "🚀", 
-      text: "Remote technical writers, age 30-50, balancing article due-dates across publications."
+      text: "Remote technical writers, 30-50, balancing article due-dates across publications."
     },
     3: {
       emoji: "🔧",
@@ -43,173 +43,177 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
 
   const progress = (currentStep / totalSteps) * 100;
 
-  const handleChooseAudience = () => {
-    const selectedOption = audienceOptions[selectedTab as keyof typeof audienceOptions];
-    onAnswer(`${selectedOption.emoji} ${selectedOption.text}`, true);
+  const handleChooseThis = () => {
+    setSelectedCard(selectedTab);
+    setCustomAudience(''); // Clear textarea when card is selected
   };
 
-  const handleCustomNext = () => {
-    if (customAudience.length >= 10) {
+  const handleClear = () => {
+    setSelectedCard(null);
+  };
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setCustomAudience(e.target.value);
+    if (e.target.value.length > 0) {
+      setSelectedCard(null); // Auto-unselect card when typing
+    }
+  };
+
+  const handleNext = () => {
+    if (selectedCard) {
+      const selectedOption = audienceOptions[selectedCard as keyof typeof audienceOptions];
+      onAnswer(`${selectedOption.emoji} ${selectedOption.text}`, true);
+    } else if (customAudience.length >= 10) {
       onAnswer(customAudience, false);
     }
   };
 
-  const handleWriteMyOwn = () => {
-    setShowCustomInput(true);
-  };
-
-  const handleBackToAI = () => {
-    setShowCustomInput(false);
-  };
+  const isNextEnabled = selectedCard !== null || customAudience.length >= 10;
 
   return (
-    <div className="min-h-screen bg-white font-inter w-[375px] mx-auto">
-      {/* Fixed Header */}
-      <div className="fixed top-0 left-0 right-0 bg-white z-10 max-w-[375px] mx-auto">
-        <div className="h-12 flex items-center justify-between px-4">
-          <button onClick={onBack} className="p-1 active:scale-95 transition-transform">
-            <ArrowLeft size={24} className="text-gray-700" />
-          </button>
-          <span className="text-sm font-medium text-gray-700">
-            {currentStep} / {totalSteps}
-          </span>
-        </div>
-        
-        {/* Progress Bar */}
-        <div className="w-full bg-gray-200 h-1">
-          <div 
-            className="bg-gradient-to-r from-[#7C5CFF] to-[#624BFF] h-1 transition-all duration-300 ease-out"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+    <div className="min-h-screen bg-white font-inter w-[375px] mx-auto overflow-hidden">
+      {/* Fixed Header - 48px height */}
+      <div className="h-12 flex items-center justify-between px-5">
+        <button onClick={onBack} className="p-1 active:scale-95 transition-transform">
+          <ArrowLeft size={24} className="text-gray-700" />
+        </button>
+        <span className="text-sm font-medium text-gray-700">
+          {currentStep} / {totalSteps}
+        </span>
+      </div>
+      
+      {/* Progress Bar - 4px below header */}
+      <div className="w-full bg-gray-200 h-1">
+        <div 
+          className="bg-gradient-to-r from-[#7C5CFF] to-[#624BFF] h-1 transition-all duration-300 ease-out"
+          style={{ width: `${progress}%` }}
+        />
       </div>
 
-      {/* Content */}
-      <div className="pt-16 px-4">
-        {/* Title */}
-        <h2 className="text-[20px] font-semibold text-[#181A1F] text-center mt-4 mb-6">
+      {/* Content with side padding */}
+      <div className="px-5">
+        {/* Title - 16px top margin */}
+        <h2 className="text-[20px] font-semibold text-[#181A1F] text-center mt-4 mb-4">
           Who exactly is this idea for?
         </h2>
 
-        {!showCustomInput ? (
-          <div className="transition-all duration-180 ease-in-out">
-            {/* Segmented Control - Reduced Height */}
-            <div className="bg-[#F5F5F5] rounded-[18px] p-1 mb-6 h-[36px] flex items-center">
-              <div className="flex w-full relative">
-                {/* Active segment background */}
-                <div 
-                  className="absolute top-0 bottom-0 w-1/3 bg-gradient-to-r from-[#7C5CFF] to-[#624BFF] rounded-[18px] transition-all duration-160 ease-in-out"
-                  style={{ transform: `translateX(${(selectedTab - 1) * 100}%)` }}
-                />
-                
-                {[1, 2, 3].map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setSelectedTab(tab)}
-                    className={`flex-1 h-full rounded-[18px] flex items-center justify-center text-[15px] font-medium transition-all duration-160 ease-in-out relative z-10 ${
-                      selectedTab === tab
-                        ? 'text-white font-bold'
-                        : 'text-[#6B7280]'
-                    }`}
-                  >
-                    {tab === 1 ? '①' : tab === 2 ? '②' : '③'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Card Container - Left-aligned with emoji */}
+        {/* Segmented Control - 32px height */}
+        <div className="bg-[#EFF0F6] rounded-[16px] p-1 mb-4 h-[32px] flex items-center">
+          <div className="flex w-full relative">
+            {/* Active segment background */}
             <div 
-              className="bg-white rounded-[16px] p-[14px] mb-3 h-[104px] flex items-start overflow-hidden"
-              style={{ 
-                boxShadow: '0 1px 4px rgba(0,0,0,0.08)'
+              className="absolute top-0 bottom-0 w-1/3 bg-gradient-to-r from-[#7C5CFF] to-[#624BFF] rounded-[16px] transition-all duration-[140ms] ease-out"
+              style={{ transform: `translateX(${(selectedTab - 1) * 100}%)` }}
+            />
+            
+            {[1, 2, 3].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setSelectedTab(tab)}
+                className={`flex-1 h-full rounded-[16px] flex items-center justify-center text-[15px] font-medium transition-all duration-[140ms] ease-out relative z-10 ${
+                  selectedTab === tab
+                    ? 'text-white font-bold'
+                    : 'text-[#6B7280]'
+                }`}
+              >
+                {tab === 1 ? '①' : tab === 2 ? '②' : '③'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Card Container - Fixed 96px height */}
+        <div 
+          className={`bg-white rounded-[14px] p-3 mb-3 h-[96px] flex items-start transition-all duration-200 ${
+            selectedCard === selectedTab ? 'ring-2 ring-[#7C5CFF]' : ''
+          }`}
+          style={{ 
+            boxShadow: '0 1px 4px rgba(0,0,0,0.08)'
+          }}
+        >
+          <div className="flex items-start gap-3 w-full">
+            <div 
+              key={`emoji-${selectedTab}`}
+              className="text-[22px] flex-shrink-0 ml-[22px] animate-fade-in"
+            >
+              {audienceOptions[selectedTab as keyof typeof audienceOptions].emoji}
+            </div>
+            <p 
+              key={`text-${selectedTab}`}
+              className="text-[15px] text-[#21242B] leading-relaxed line-clamp-3 animate-fade-in font-medium"
+              style={{
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden'
               }}
             >
-              <div className="flex items-start gap-3 w-full">
-                <div 
-                  key={`emoji-${selectedTab}`}
-                  className="text-[24px] flex-shrink-0 animate-fade-in"
-                >
-                  {audienceOptions[selectedTab as keyof typeof audienceOptions].emoji}
-                </div>
-                <p 
-                  key={`text-${selectedTab}`}
-                  className="text-[15px] text-[#21242B] leading-relaxed line-clamp-3 animate-fade-in font-medium"
-                  style={{
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
-                  }}
-                >
-                  {audienceOptions[selectedTab as keyof typeof audienceOptions].text}
-                </p>
-              </div>
-            </div>
-
-            {/* Primary Button - Reduced height and margin */}
-            <Button
-              onClick={handleChooseAudience}
-              className="w-full h-[44px] bg-gradient-to-r from-[#7C5CFF] to-[#624BFF] hover:from-[#6B4CFF] hover:to-[#5340FF] text-white rounded-[22px] font-medium mt-3 mb-2 active:scale-[0.98] transition-all duration-120 ease-in-out border-0"
-            >
-              Choose this
-            </Button>
-
-            {/* Write My Own Link - Adjusted styling */}
-            <div className="text-center mt-2">
-              <button
-                onClick={handleWriteMyOwn}
-                className="text-[14px] text-[#7C5CFF] font-medium active:scale-95 transition-transform"
-              >
-                Write my own instead
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="animate-slide-in-up">
-            {/* Back to AI Link */}
-            <div className="text-center mb-4">
-              <button
-                onClick={handleBackToAI}
-                className="text-[12px] text-[#6B7280] active:scale-95 transition-transform"
-              >
-                ← Back to AI suggestions
-              </button>
-            </div>
-
-            {/* Custom Text Area - Adjusted height */}
-            <div className="space-y-2">
-              <Textarea
-                value={customAudience}
-                onChange={(e) => setCustomAudience(e.target.value)}
-                placeholder="e.g. Busy sales reps in EU SaaS startups"
-                className="h-[96px] text-[15px] border-gray-200 rounded-[16px] resize-none font-medium"
-                maxLength={100}
-              />
-              
-              {/* Character Counter */}
-              <div className="text-right">
-                <span className="text-[12px] text-[#6B7280]">
-                  {customAudience.length}/100
-                </span>
-              </div>
-            </div>
-
-            {/* Next Button */}
-            <Button
-              onClick={handleCustomNext}
-              disabled={customAudience.length < 10}
-              className="w-full h-[44px] bg-gradient-to-r from-[#7C5CFF] to-[#624BFF] hover:from-[#6B4CFF] hover:to-[#5340FF] text-white rounded-[22px] font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-120 ease-in-out border-0 mt-3 mb-2"
-            >
-              Next
-            </Button>
-
-            {/* Tip */}
-            <p className="text-[12px] text-[#6B7280] text-center mt-2">
-              Include role, age range, short need.
+              {audienceOptions[selectedTab as keyof typeof audienceOptions].text}
             </p>
           </div>
-        )}
+        </div>
+
+        {/* Small CTA Row */}
+        <div className="flex items-center justify-between mb-3">
+          <Button
+            onClick={handleChooseThis}
+            variant="outline"
+            className="h-[32px] border-[#7C5CFF] text-[#7C5CFF] hover:bg-[#7C5CFF] hover:text-white rounded-[16px] px-4 text-sm"
+          >
+            Choose this
+          </Button>
+          
+          {selectedCard && (
+            <button
+              onClick={handleClear}
+              className="text-[12px] text-[#6B7280] hover:text-[#7C5CFF] transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* Divider "or" line */}
+        <div className="relative my-3">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-[#E5E7EB]"></div>
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-white px-2 text-[#6B7280] text-[12px]">or</span>
+          </div>
+        </div>
+
+        {/* Textarea - Fixed 80px height */}
+        <div className="space-y-1">
+          <Textarea
+            value={customAudience}
+            onChange={handleTextareaChange}
+            placeholder="e.g. Busy sales reps in EU SaaS startups"
+            className="h-[80px] text-[15px] border-gray-200 rounded-[14px] resize-none font-medium"
+            maxLength={100}
+          />
+          
+          {/* Character Counter */}
+          <div className="text-right">
+            <span className="text-[12px] text-[#6B7280]">
+              {customAudience.length}/100
+            </span>
+          </div>
+        </div>
+
+        {/* Tip line */}
+        <p className="text-[12px] text-[#6B7280] mt-1.5 mb-3.5">
+          Include role, age range, short need.
+        </p>
+
+        {/* Primary Button */}
+        <Button
+          onClick={handleNext}
+          disabled={!isNextEnabled}
+          className="w-full h-[42px] bg-gradient-to-r from-[#7C5CFF] to-[#624BFF] hover:from-[#6B4CFF] hover:to-[#5340FF] text-white rounded-[22px] font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-120 ease-in-out border-0"
+        >
+          Next
+        </Button>
       </div>
     </div>
   );
