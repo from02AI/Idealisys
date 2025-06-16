@@ -1,3 +1,4 @@
+
 import OpenAI from "openai";
 // Import ChatCompletionMessageParam for explicit typing
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
@@ -8,10 +9,11 @@ console.log("OpenAI API Key:", import.meta.env.VITE_OPENAI_API_KEY ? "Loaded" : 
 // Fix API key if it contains newlines (common issue with .env files)
 const apiKey = import.meta.env.VITE_OPENAI_API_KEY?.replace(/\n/g, '');
 
-const openai = new OpenAI({
+// Only instantiate OpenAI client if API key is available
+const openai = apiKey ? new OpenAI({
   apiKey: apiKey,
   dangerouslyAllowBrowser: true, // This is for client-side usage, remember to secure for production!
-});
+}) : null;
 
 interface OpenAIResponse {
   choices: Array<{
@@ -21,12 +23,6 @@ interface OpenAIResponse {
     index?: number; // index is optional for clarity
   }>;
 }
-
-// NOTE: The global SYSTEM_PROMPT below is now OBSOLETE based on our new strategy.
-// It is kept here commented out for reference, but it will no longer be directly used in generateQuestionOptions.
-/*
-const SYSTEM_PROMPT = `You are Solivra, a concise startup mentor. Always output exactly three re-phrasings of the user's idea, each as a single sentence of 25 words or fewer. Every sentence must begin with a capital letter, mention the core problem and who faces it, and end with a period. Do NOT add bullet points, numbers, emojis, or extra commentary. Respond as valid JSON: { "options": ["…", "…", "…"] }.`;
-*/
 
 // The new system prompt with updated constraints and output schema.
 const baseRules = `You are a rewriting engine that outputs ONLY valid JSON.
@@ -54,8 +50,6 @@ Output schema:
 \`\`\`
 `;
 
-// --- helper functions -------------------------------------------------------------
-
 // Helper to detect missing components - this remains as it is still needed for the AI's input.
 function detectMissing(userIdea: string): 'none' | 'audience' | 'problem' | 'solution' {
   const hasWho = /pet owners|travelers|individuals|people|customers|clients|users|for|to|with|helps|helping|target|group/i.test(userIdea);
@@ -70,9 +64,10 @@ function detectMissing(userIdea: string): 'none' | 'audience' | 'problem' | 'sol
   return missingPart;
 }
 
-// --- main generation function ---------------------------------------------------------------
+// main generation function
 export async function generateQuestionOptions(userIdea: string): Promise<string[]> {
-  if (!import.meta.env.VITE_OPENAI_API_KEY) {
+  if (!openai) {
+    console.log("OpenAI client not available, returning mock options");
     return [
       "Mock rephrasing for testing purposes (Option 1).",
       "Another concise rephrasing example (Option 2).",
@@ -151,7 +146,7 @@ export async function generateValidationReport(
   insights: string;
   nextSteps: string;
 }> {
-  if (!import.meta.env.VITE_OPENAI_API_KEY) {
+  if (!openai) {
     // Return mock report if no API key
     return {
       ideaSummary: "Your idea shows promise and addresses a real market need with innovative approach.",

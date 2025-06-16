@@ -35,11 +35,7 @@ const QuestionScreen: React.FC<QuestionScreenProps> = ({
     const loadOptions = async () => {
       setLoading(true);
       try {
-        const generatedOptions = await generateQuestionOptions(
-          userIdea,
-          advisor.tone,
-          question.prompt
-        );
+        const generatedOptions = await generateQuestionOptions(userIdea);
         setOptions(generatedOptions);
       } catch (error) {
         console.error('Error loading options:', error);

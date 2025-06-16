@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 import QuestionScreen from './QuestionScreen';
 import Question1Screen from './Question1Screen';
-import Question2Screen from './Question2Screen'; // Import the new component
+import Question2Screen from './Question2Screen';
 import { Question, AdvisorPersona } from '../types';
 import { getQuestionById, QUESTIONS } from '../data/questions';
 import { getAdvisorById } from '../data/advisors';
