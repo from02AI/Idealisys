@@ -28,15 +28,12 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
 
   const audienceOptions = {
     1: {
-      emoji: "🎯",
       text: "Freelance UX designers, aged 25-40 in global tech hubs, juggle overlapping sprint deadlines."
     },
     2: {
-      emoji: "🚀", 
       text: "Remote technical writers, 30-50, balancing article due-dates across publications."
     },
     3: {
-      emoji: "🔧",
       text: "Startup software engineers, 24-35, managing tight release cycles, need a unified deadline view."
     }
   };
@@ -62,7 +59,7 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
   const handleNext = () => {
     if (selectedCard) {
       const selectedOption = audienceOptions[selectedCard as keyof typeof audienceOptions];
-      onAnswer(`${selectedOption.emoji} ${selectedOption.text}`, true);
+      onAnswer(selectedOption.text, true);
     } else if (customAudience.length >= 10) {
       onAnswer(customAudience, false);
     }
@@ -122,22 +119,16 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
           </div>
         </div>
 
-        {/* Card Container - Fixed 96px height */}
+        {/* Card Container - Fixed 96px height, no icon, 16px left padding */}
         <div 
-          className={`bg-white rounded-[14px] p-3 mb-3 h-[96px] flex items-start transition-all duration-200 ${
+          className={`bg-white rounded-[14px] p-3 pl-4 mb-3 h-[96px] flex items-start transition-all duration-200 ${
             selectedCard === selectedTab ? 'ring-2 ring-[#7C5CFF]' : ''
           }`}
           style={{ 
             boxShadow: '0 1px 4px rgba(0,0,0,0.08)'
           }}
         >
-          <div className="flex items-start gap-3 w-full">
-            <div 
-              key={`emoji-${selectedTab}`}
-              className="text-[22px] flex-shrink-0 ml-[22px] animate-fade-in"
-            >
-              {audienceOptions[selectedTab as keyof typeof audienceOptions].emoji}
-            </div>
+          <div className="flex items-start w-full">
             <p 
               key={`text-${selectedTab}`}
               className="text-[15px] text-[#21242B] leading-relaxed line-clamp-3 animate-fade-in font-medium"
@@ -153,20 +144,22 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
           </div>
         </div>
 
-        {/* Small CTA Row */}
+        {/* Centered CTA Row with fixed width button */}
         <div className="flex items-center justify-between mb-3">
-          <Button
-            onClick={handleChooseThis}
-            variant="outline"
-            className="h-[32px] border-[#7C5CFF] text-[#7C5CFF] hover:bg-[#7C5CFF] hover:text-white rounded-[16px] px-4 text-sm"
-          >
-            Choose this
-          </Button>
+          <div className="w-full flex justify-center">
+            <Button
+              onClick={handleChooseThis}
+              variant="outline"
+              className="w-[160px] h-[42px] border-[#7C5CFF] text-[#7C5CFF] hover:bg-[#7C5CFF] hover:text-white rounded-[16px] px-4 text-sm"
+            >
+              Choose this
+            </Button>
+          </div>
           
           {selectedCard && (
             <button
               onClick={handleClear}
-              className="text-[12px] text-[#6B7280] hover:text-[#7C5CFF] transition-colors"
+              className="text-[12px] text-[#6B7280] hover:text-[#7C5CFF] transition-colors absolute right-5"
             >
               Clear
             </button>
@@ -193,6 +186,13 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
             maxLength={100}
           />
           
+          {/* Tip Box - below textarea, above character counter */}
+          <div className="text-center mt-1.5">
+            <p className="text-[12px] text-[#6B7280]">
+              💡 Tip: Include role, age range, and the key need.
+            </p>
+          </div>
+          
           {/* Character Counter */}
           <div className="text-right">
             <span className="text-[12px] text-[#6B7280]">
@@ -201,16 +201,11 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
           </div>
         </div>
 
-        {/* Tip line */}
-        <p className="text-[12px] text-[#6B7280] mt-1.5 mb-3.5">
-          Include role, age range, short need.
-        </p>
-
         {/* Primary Button */}
         <Button
           onClick={handleNext}
           disabled={!isNextEnabled}
-          className="w-full h-[42px] bg-gradient-to-r from-[#7C5CFF] to-[#624BFF] hover:from-[#6B4CFF] hover:to-[#5340FF] text-white rounded-[22px] font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-120 ease-in-out border-0"
+          className="w-full h-[42px] bg-gradient-to-r from-[#7C5CFF] to-[#624BFF] hover:from-[#6B4CFF] hover:to-[#5340FF] text-white rounded-[22px] font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-120 ease-in-out border-0 mt-3.5"
         >
           Next
         </Button>
