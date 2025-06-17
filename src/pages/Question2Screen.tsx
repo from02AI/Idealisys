@@ -1,9 +1,8 @@
-
 import React, { useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { AdvisorPersona } from '../types';
+import QuestionHeader from '../components/QuestionHeader';
 
 interface Question2ScreenProps {
   currentStep: number;
@@ -38,11 +37,10 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
     }
   };
 
-  const progress = (currentStep / totalSteps) * 100;
-
   const handleChooseThis = () => {
     setSelectedCard(selectedTab);
     setCustomAudience(''); // Clear textarea when card is selected
+    handleNext();
   };
 
   const handleClear = () => {
@@ -68,38 +66,25 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
   const isNextEnabled = selectedCard !== null || customAudience.length >= 10;
 
   return (
-    <div className="min-h-screen bg-white font-inter w-[375px] mx-auto overflow-hidden">
-      {/* Fixed Header - 48px height */}
-      <div className="h-12 flex items-center justify-between px-5">
-        <button onClick={onBack} className="p-1 active:scale-95 transition-transform">
-          <ArrowLeft size={24} className="text-gray-700" />
-        </button>
-        <span className="text-sm font-medium text-gray-700">
-          {currentStep} / {totalSteps}
-        </span>
-      </div>
+    <div className="min-h-screen bg-white font-inter w-[375px] mx-auto overflow-hidden px-4">
+      <QuestionHeader
+        currentStep={currentStep}
+        totalSteps={totalSteps}
+        onBack={onBack}
+      />
       
-      {/* Progress Bar - 4px below header */}
-      <div className="w-full bg-gray-200 h-1">
-        <div 
-          className="bg-gradient-to-r from-[#7C5CFF] to-[#624BFF] h-1 transition-all duration-300 ease-out"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-
-      {/* Content with side padding */}
-      <div className="px-5">
-        {/* Title - 16px top margin */}
-        <h2 className="text-[20px] font-semibold text-[#181A1F] text-center mt-4 mb-4">
+      <div className="mt-2">
+        <h2 className="text-[20px] font-semibold text-[#181A1F] text-center mb-4">
           Who exactly is this idea for?
         </h2>
 
-        {/* Segmented Control - 32px height */}
-        <div className="bg-[#EFF0F6] rounded-[16px] p-1 mb-4 h-[32px] flex items-center">
+        <div 
+          className="bg-[#ECEEF5] rounded-[16px] p-1 mb-4 h-[32px] flex items-center"
+          style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,.04)' }}
+        >
           <div className="flex w-full relative">
-            {/* Active segment background */}
             <div 
-              className="absolute top-0 bottom-0 w-1/3 bg-gradient-to-r from-[#7C5CFF] to-[#624BFF] rounded-[16px] transition-all duration-[140ms] ease-out"
+              className="absolute top-0 bottom-0 w-1/3 bg-[#7C5CFF] rounded-[16px] transition-all duration-[140ms] ease-out"
               style={{ transform: `translateX(${(selectedTab - 1) * 100}%)` }}
             />
             
@@ -107,19 +92,22 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
               <button
                 key={tab}
                 onClick={() => setSelectedTab(tab)}
-                className={`flex-1 h-full rounded-[16px] flex items-center justify-center text-[15px] font-medium transition-all duration-[140ms] ease-out relative z-10 ${
-                  selectedTab === tab
-                    ? 'text-white font-bold'
-                    : 'text-[#6B7280]'
-                }`}
+                className={`flex-1 h-full rounded-[16px] flex items-center justify-center relative z-10 transition-all duration-[140ms] ease-out`}
               >
-                {tab === 1 ? '①' : tab === 2 ? '②' : '③'}
+                <span className={`
+                  w-6 h-6 rounded-full flex items-center justify-center text-sm
+                  ${selectedTab === tab
+                    ? 'bg-transparent text-white font-bold'
+                    : 'border border-[#7C5CFF] text-[#7C5CFF] font-semibold'
+                  }
+                `}>
+                  {tab}
+                </span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Card Container - Fixed 96px height, no icon, 16px left padding */}
         <div 
           className={`bg-white rounded-[14px] p-3 pl-4 mb-3 h-[96px] flex items-start transition-all duration-200 ${
             selectedCard === selectedTab ? 'ring-2 ring-[#7C5CFF]' : ''
@@ -144,7 +132,6 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
           </div>
         </div>
 
-        {/* Centered CTA Row with fixed width button */}
         <div className="flex items-center justify-between mb-3">
           <div className="w-full flex justify-center">
             <Button
@@ -152,7 +139,7 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
               variant="outline"
               className="w-[160px] h-[42px] border-[#7C5CFF] text-[#7C5CFF] hover:bg-[#7C5CFF] hover:text-white rounded-[16px] px-4 text-sm"
             >
-              Choose this
+              Choose
             </Button>
           </div>
           
@@ -166,7 +153,6 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
           )}
         </div>
 
-        {/* Divider "or" line */}
         <div className="relative my-3">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-[#E5E7EB]"></div>
@@ -176,7 +162,6 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
           </div>
         </div>
 
-        {/* Textarea - Fixed 80px height */}
         <div className="space-y-1">
           <Textarea
             value={customAudience}
@@ -186,14 +171,12 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
             maxLength={100}
           />
           
-          {/* Tip Box - below textarea, above character counter */}
           <div className="text-center mt-1.5">
             <p className="text-[12px] text-[#6B7280]">
               💡 Tip: Include role, age range, and the key need.
             </p>
           </div>
           
-          {/* Character Counter */}
           <div className="text-right">
             <span className="text-[12px] text-[#6B7280]">
               {customAudience.length}/100
@@ -201,7 +184,6 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
           </div>
         </div>
 
-        {/* Primary Button */}
         <Button
           onClick={handleNext}
           disabled={!isNextEnabled}

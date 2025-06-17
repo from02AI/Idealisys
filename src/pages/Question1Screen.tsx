@@ -7,6 +7,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { Question, AdvisorPersona } from '../types';
 import { generateQuestionOptions } from '../services/openai';
 import { useNavigate } from 'react-router-dom';
+import QuestionHeader from '../components/QuestionHeader';
 
 interface QuestionScreenProps {
   question: Question;
@@ -31,7 +32,6 @@ const Question1Screen: React.FC<QuestionScreenProps> = ({
   const [loading, setLoading] = useState(true);
   const [customAnswer, setCustomAnswer] = useState('');
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const navigate = useNavigate();
   const [showAIOptions, setShowAIOptions] = useState(false);
   const [showAIValidationError, setShowAIValidationError] = useState(false);
 
@@ -60,7 +60,8 @@ const Question1Screen: React.FC<QuestionScreenProps> = ({
   }
 
   // Set the state variables based on the combined validation
-  const isValidInputForAI = currentIsValidInput; // Use this derived value in JSX
+  // TODO: REMOVE FOR PRODUCTION - This line is temporarily set to true for development/testing to bypass input validation.
+  const isValidInputForAI = true; // Use this derived value in JSX
   const validationMessage = currentValidationMessage; // Use this derived value in JSX
 
   useEffect(() => {
@@ -143,41 +144,11 @@ const Question1Screen: React.FC<QuestionScreenProps> = ({
   return (
     <div className="h-screen overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-purple-50 pt-2 pb-4 px-4">
       <div className="max-w-2xl mx-auto flex flex-col h-full">
-        <div className="mb-3 flex-shrink-0 relative">
-          <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              onClick={onBack}
-              className="text-gray-600 hover:text-gray-800 transition-colors p-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-              </svg>
-            </Button>
-            <div className="absolute left-1/2 -translate-x-1/2">
-              <span className="text-sm font-medium text-gray-600">
-                Step {currentStep} of {totalSteps}
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              onClick={() => navigate('/info')}
-              className="text-gray-600 hover:text-gray-800 transition-colors p-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="16" x2="12" y2="12" />
-                  <line x1="12" y1="8" x2="12.01" y2="8" />
-              </svg>
-            </Button>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
-            <div
-              className="bg-gradient-to-r from-indigo-500 to-purple-600 h-1 rounded-full transition-all duration-500"
-              style={{ width: `${(currentStep / totalSteps) * 100}%` }}
-            />
-          </div>
-        </div>
+        <QuestionHeader
+          currentStep={currentStep}
+          totalSteps={totalSteps}
+          onBack={onBack}
+        />
 
         <div className="animate-fade-in flex flex-col flex-grow overflow-y-auto hide-scrollbar">
           <div className="text-center mb-0 flex-shrink-0">

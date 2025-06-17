@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import QuestionScreen from './QuestionScreen';
 import Question1Screen from './Question1Screen';
 import Question2Screen from './Question2Screen';
+import Question3Screen from './Question3Screen';
 import { Question, AdvisorPersona } from '../types';
 import { getQuestionById, QUESTIONS } from '../data/questions';
 import { getAdvisorById } from '../data/advisors';
@@ -122,6 +122,18 @@ const QuestionFlowContainer: React.FC = () => {
   } else if (currentStep === 2) {
     return (
       <Question2Screen
+        currentStep={currentStep}
+        totalSteps={totalSteps}
+        advisor={advisor}
+        userIdea={initialUserIdea}
+        onAnswer={handleAnswer}
+        onBack={handleBack}
+      />
+    );
+  } else if (currentStep === 3) {
+    return (
+      <Question3Screen
+        question={question}
         currentStep={currentStep}
         totalSteps={totalSteps}
         advisor={advisor}
