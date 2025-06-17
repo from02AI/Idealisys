@@ -7,6 +7,7 @@ import Q2scr from './Q2scr';
 import Q3scr from './Q3scr';
 import Q4scr from './Q4scr';
 import Q5scr from './Q5scr';
+import Q6scr from './Q6scr';
 import { Question, AdvisorPersona } from '../types';
 import { getQuestionById, QUESTIONS } from '../data/questions';
 import { getAdvisorById } from '../data/advisors';
@@ -159,6 +160,19 @@ const QuestionFlowContainer: React.FC = () => {
   } else if (currentStep === 5) {
     return (
       <Q5scr
+        question={question}
+        currentStep={currentStep}
+        totalSteps={totalSteps}
+        advisor={advisor}
+        userIdea={initialUserIdea}
+        allAnswers={allAnswers}
+        onAnswer={handleAnswer}
+        onBack={handleBack}
+      />
+    );
+  } else if (currentStep === 6) {
+    return (
+      <Q6scr
         question={question}
         currentStep={currentStep}
         totalSteps={totalSteps}
