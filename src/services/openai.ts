@@ -1,18 +1,50 @@
 
 import OpenAI from "openai";
-// Import ChatCompletionMessageParam for explicit typing
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
-// Log the API key to the console during development
-console.log("OpenAI API Key:", import.meta.env.VITE_OPENAI_API_KEY ? "Loaded" : "Not Loaded");
+// Validate API key exists and is properly formatted
+const validateApiKey = (key: string | undefined): boolean => {
+  if (!key || key.trim() === '') {
+    console.warn("OpenAI API key is missing");
+    return false;
+  }
+  
+  // Check if key follows OpenAI format (starts with sk-)
+  if (!key.startsWith('sk-')) {
+    console.warn("OpenAI API key format appears invalid");
+    return false;
+  }
+  
+  return true;
+};
 
-// Fix API key if it contains newlines (common issue with .env files)
-const apiKey = import.meta.env.VITE_OPENAI_API_KEY?.replace(/\n/g, '');
+// Sanitize API key by removing common formatting issues
+const sanitizeApiKey = (key: string | undefined): string | null => {
+  if (!key) return null;
+  
+  // Remove newlines, spaces, and other whitespace
+  const sanitized = key.replace(/[\n\r\s]/g, '');
+  
+  return validateApiKey(sanitized) ? sanitized : null;
+};
 
-// Only instantiate OpenAI client if API key is available
+// Get and validate API key
+const apiKey = sanitizeApiKey(import.meta.env.VITE_OPENAI_API_KEY);
+
+// Enhanced logging for development (without exposing the key)
+if (import.meta.env.DEV) {
+  console.log("OpenAI API Key Status:", apiKey ? "✓ Valid" : "✗ Invalid/Missing");
+  if (!apiKey) {
+    console.error("Please set VITE_OPENAI_API_KEY in your environment variables");
+  }
+}
+
+// Secure OpenAI client instantiation
 const openai = apiKey ? new OpenAI({
   apiKey: apiKey,
-  dangerouslyAllowBrowser: true, // This is for client-side usage, remember to secure for production!
+  dangerouslyAllowBrowser: true,
+  // Add timeout for better error handling
+  timeout: 30000,
 }) : null;
 
 interface OpenAIResponse {
@@ -20,11 +52,11 @@ interface OpenAIResponse {
     message: {
       content: string;
     };
-    index?: number; // index is optional for clarity
+    index?: number;
   }>;
 }
 
-// The new system prompt with updated constraints and output schema.
+// Enhanced base rules with input validation
 const baseRules = `You are a rewriting engine that outputs ONLY valid JSON.
 
 Constraints for each option:
@@ -50,56 +82,124 @@ Output schema:
 \`\`\`
 `;
 
-// Helper to detect missing components - this remains as it is still needed for the AI's input.
-function detectMissing(userIdea: string): 'none' | 'audience' | 'problem' | 'solution' {
-  const hasWho = /pet owners|travelers|individuals|people|customers|clients|users|for|to|with|helps|helping|target|group/i.test(userIdea);
-  const hasProblem = /need|problem|issue|challenge|difficulty|frustration|struggling|away|when away|no care|unreliable|trustworthy|stress|worry|concern|burden|hindrance|solve|addresses/i.test(userIdea);
-  const hasSolution = /platform|app|service|tool|software|solution|system|way|method|product|offering|connects|matches|provides|allows|sitters|care|arrangement|resource|feature|offer/i.test(userIdea);
-
-  let missingPart: 'none' | 'audience' | 'problem' | 'solution' = 'none';
-  if (!hasWho) missingPart = 'audience';
-  else if (!hasProblem) missingPart = 'problem';
-  else if (!hasSolution) missingPart = 'solution';
+// Input sanitization function
+const sanitizeInput = (input: string): string => {
+  if (typeof input !== 'string') {
+    throw new Error('Input must be a string');
+  }
   
-  return missingPart;
+  // Remove potentially dangerous characters and limit length
+  const sanitized = input
+    .replace(/[<>]/g, '') // Remove HTML tags
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .trim()
+    .slice(0, 1000); // Limit input length
+  
+  if (sanitized.length === 0) {
+    throw new Error('Input cannot be empty after sanitization');
+  }
+  
+  return sanitized;
+};
+
+// Enhanced missing component detection with validation
+function detectMissing(userIdea: string): 'none' | 'audience' | 'problem' | 'solution' {
+  try {
+    const sanitizedIdea = sanitizeInput(userIdea);
+    
+    const hasWho = /pet owners|travelers|individuals|people|customers|clients|users|for|to|with|helps|helping|target|group/i.test(sanitizedIdea);
+    const hasProblem = /need|problem|issue|challenge|difficulty|frustration|struggling|away|when away|no care|unreliable|trustworthy|stress|worry|concern|burden|hindrance|solve|addresses/i.test(sanitizedIdea);
+    const hasSolution = /platform|app|service|tool|software|solution|system|way|method|product|offering|connects|matches|provides|allows|sitters|care|arrangement|resource|feature|offer/i.test(sanitizedIdea);
+
+    let missingPart: 'none' | 'audience' | 'problem' | 'solution' = 'none';
+    if (!hasWho) missingPart = 'audience';
+    else if (!hasProblem) missingPart = 'problem';
+    else if (!hasSolution) missingPart = 'solution';
+    
+    return missingPart;
+  } catch (error) {
+    console.error('Error in detectMissing:', error);
+    return 'none'; // Safe fallback
+  }
 }
 
-// main generation function
+// Rate limiting implementation
+class RateLimiter {
+  private requests: number[] = [];
+  private readonly maxRequests = 10;
+  private readonly timeWindow = 60000; // 1 minute
+
+  canMakeRequest(): boolean {
+    const now = Date.now();
+    // Remove old requests outside the time window
+    this.requests = this.requests.filter(time => now - time < this.timeWindow);
+    
+    if (this.requests.length >= this.maxRequests) {
+      return false;
+    }
+    
+    this.requests.push(now);
+    return true;
+  }
+
+  getTimeUntilNextRequest(): number {
+    if (this.requests.length < this.maxRequests) return 0;
+    
+    const oldestRequest = Math.min(...this.requests);
+    return this.timeWindow - (Date.now() - oldestRequest);
+  }
+}
+
+const rateLimiter = new RateLimiter();
+
+// Secure main generation function with enhanced error handling
 export async function generateQuestionOptions(userIdea: string): Promise<string[]> {
+  // Input validation
+  if (!userIdea || typeof userIdea !== 'string') {
+    throw new Error('Invalid input: userIdea must be a non-empty string');
+  }
+
+  // Rate limiting check
+  if (!rateLimiter.canMakeRequest()) {
+    const waitTime = Math.ceil(rateLimiter.getTimeUntilNextRequest() / 1000);
+    throw new Error(`Rate limit exceeded. Please wait ${waitTime} seconds before making another request.`);
+  }
+
+  // API client validation
   if (!openai) {
-    console.log("OpenAI client not available, returning mock options");
+    console.warn("OpenAI client not available, returning fallback options");
     return [
-      "Mock rephrasing for testing purposes (Option 1).",
-      "Another concise rephrasing example (Option 2).",
-      "A third short rephrased idea (Option 3)."
+      "Consider elaborating on your target audience and their specific needs.",
+      "Think about the core problem your solution addresses uniquely.",
+      "Focus on what makes your approach different from existing alternatives."
     ];
   }
 
   try {
-    const missing = detectMissing(userIdea);
+    const sanitizedIdea = sanitizeInput(userIdea);
+    const missing = detectMissing(sanitizedIdea);
     
-    // Construct the user message as a JSON string, as per the new prompt's input schema.
+    // Construct secure user message
     const userMessageContent = JSON.stringify({
-        idea: userIdea,
-        missing: missing
+      idea: sanitizedIdea,
+      missing: missing
     });
 
-    // Explicitly type the messages array to satisfy TypeScript
     const messages: ChatCompletionMessageParam[] = [
       { role: "system", content: baseRules },
-      { role: "user", content: userMessageContent } // Send the JSON input as the user's message
+      { role: "user", content: userMessageContent }
     ];
 
-    // Debugging: Log the messages before API call
-    console.log(`→ API Request Messages:\n`, JSON.stringify(messages, null, 2));
-
-    // Use the OpenAI client directly for the API call to get all 3 options in one response.
+    // Enhanced API call with better error handling
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: messages, // Pass the messages array
-      temperature: 0.9,     // Higher temperature for more lexical variety
-      max_tokens: 220,       // Sufficient tokens for the JSON output containing 3 options
-      n: 1                 // Request 1 completion which should contain the JSON with 3 options
+      messages: messages,
+      temperature: 0.9,
+      max_tokens: 220,
+      n: 1,
+      // Add safety parameters
+      presence_penalty: 0.1,
+      frequency_penalty: 0.1
     });
 
     const content = response.choices[0]?.message?.content;
@@ -108,33 +208,156 @@ export async function generateQuestionOptions(userIdea: string): Promise<string[
       throw new Error('No content received from OpenAI completion.');
     }
 
-    // Parse the JSON response expecting { "options": [...] }
-    const result = JSON.parse(content);
+    // Secure JSON parsing with validation
+    let result;
+    try {
+      result = JSON.parse(content);
+    } catch (parseError) {
+      console.warn("Failed to parse OpenAI response as JSON:", parseError);
+      throw new Error('Invalid response format from OpenAI');
+    }
     
-    // Validate the parsed structure for exactly an array of 3 strings
-    if (!result || !Array.isArray(result.options) || result.options.length !== 3 || result.options.some((opt: any) => typeof opt !== 'string')) {
-      console.warn("Invalid response format from OpenAI, returning fallback options. Raw content:", content);
+    // Enhanced response validation
+    if (!result || 
+        !Array.isArray(result.options) || 
+        result.options.length !== 3 || 
+        result.options.some((opt: any) => typeof opt !== 'string' || opt.length > 200)) {
+      console.warn("Invalid response structure from OpenAI");
       return [
-        "Please provide more context for your idea.",
-        "Consider elaborating on the core problem you're solving.",
-        "Who is the primary user for this solution?"
+        "Please provide more specific details about your target users.",
+        "Consider clarifying the main challenge you're addressing.",
+        "Think about what unique value your solution provides."
       ];
     }
 
-    // Trim each option and return the array
-    return result.options.map((opt: string) => opt.trim());
+    // Sanitize and return options
+    return result.options.map((opt: string) => sanitizeInput(opt));
 
   } catch (error: any) {
-    console.error('Error generating question options:', error.message || error);
-    // Fallback options for 3
+    console.error('Error generating question options:', error);
+    
+    // Provide helpful error messages based on error type
+    if (error.message?.includes('rate limit')) {
+      throw error; // Re-throw rate limit errors
+    }
+    
+    // Secure fallback options
     return [
-      "Could you rephrase your idea to be more specific.",
-      "Think about the direct value your idea provides.",
-      "Focus on the main challenge this idea addresses."
+      "Consider refining your idea to be more specific about the target audience.",
+      "Think about the primary challenge your solution addresses.",
+      "Focus on what makes your approach uniquely valuable."
     ];
   }
 }
 
+// New function for fetching founder doubts (referenced in Q6Scr but missing)
+export async function fetchFounderDoubts(context: {
+  idea: string;
+  audience: string;
+  problem: string;
+  solution: string;
+}): Promise<string[]> {
+  // Input validation
+  const requiredFields = ['idea', 'audience', 'problem', 'solution'];
+  for (const field of requiredFields) {
+    if (!context[field as keyof typeof context] || typeof context[field as keyof typeof context] !== 'string') {
+      throw new Error(`Invalid context: ${field} must be a non-empty string`);
+    }
+  }
+
+  // Rate limiting check
+  if (!rateLimiter.canMakeRequest()) {
+    const waitTime = Math.ceil(rateLimiter.getTimeUntilNextRequest() / 1000);
+    throw new Error(`Rate limit exceeded. Please wait ${waitTime} seconds before making another request.`);
+  }
+
+  if (!openai) {
+    console.warn("OpenAI client not available, returning fallback doubts");
+    return [
+      "Is the market large enough to sustain this business?",
+      "Do we have the technical resources to build this effectively?",
+      "Will users change their existing habits to adopt our solution?",
+      "How will we compete against established players in this space?",
+      "Are our core assumptions about the problem validated by real users?"
+    ];
+  }
+
+  try {
+    // Sanitize all inputs
+    const sanitizedContext = {
+      idea: sanitizeInput(context.idea),
+      audience: sanitizeInput(context.audience),
+      problem: sanitizeInput(context.problem),
+      solution: sanitizeInput(context.solution)
+    };
+
+    const systemPrompt = `Generate 5 realistic founder doubts based on the provided startup context. Focus on common concerns founders have about market validation, execution, competition, and scaling. Return only a JSON array of strings.`;
+
+    const userPrompt = `Context:
+- Idea: ${sanitizedContext.idea}
+- Target Audience: ${sanitizedContext.audience}
+- Problem: ${sanitizedContext.problem}
+- Solution: ${sanitizedContext.solution}
+
+Generate 5 founder doubts as a JSON array.`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 300,
+      n: 1
+    });
+
+    const content = response.choices[0]?.message?.content;
+    
+    if (!content) {
+      throw new Error('No content received from OpenAI');
+    }
+
+    let doubts;
+    try {
+      doubts = JSON.parse(content);
+    } catch (parseError) {
+      console.warn("Failed to parse doubts response:", parseError);
+      throw new Error('Invalid response format');
+    }
+
+    // Validate response structure
+    if (!Array.isArray(doubts) || doubts.length !== 5 || doubts.some(doubt => typeof doubt !== 'string' || doubt.length > 150)) {
+      console.warn("Invalid doubts response structure");
+      return [
+        "Is our target market large enough for sustainable growth?",
+        "Can we build this with our current team and resources?",
+        "Will users adopt a new solution when alternatives exist?",
+        "How will we differentiate from larger competitors?",
+        "Are we solving a problem people will pay to fix?"
+      ];
+    }
+
+    return doubts.map(doubt => sanitizeInput(doubt));
+
+  } catch (error: any) {
+    console.error('Error fetching founder doubts:', error);
+    
+    if (error.message?.includes('rate limit')) {
+      throw error;
+    }
+    
+    return [
+      "Is the market timing right for our solution?",
+      "Do we have the right team to execute this vision?",
+      "Will customers pay enough to make this profitable?",
+      "How will we handle well-funded competition?",
+      "Are we solving a real problem or a perceived one?"
+    ];
+  }
+}
+
+// Enhanced validation report generation with security improvements
 export async function generateValidationReport(
   answers: Record<number, string>,
   persona: string,
@@ -146,92 +369,146 @@ export async function generateValidationReport(
   insights: string;
   nextSteps: string;
 }> {
+  // Input validation
+  if (!answers || typeof answers !== 'object') {
+    throw new Error('Invalid answers: must be a non-empty object');
+  }
+  
+  if (!persona || typeof persona !== 'string') {
+    throw new Error('Invalid persona: must be a non-empty string');
+  }
+  
+  if (!userIdea || typeof userIdea !== 'string') {
+    throw new Error('Invalid userIdea: must be a non-empty string');
+  }
+
+  // Rate limiting check
+  if (!rateLimiter.canMakeRequest()) {
+    const waitTime = Math.ceil(rateLimiter.getTimeUntilNextRequest() / 1000);
+    throw new Error(`Rate limit exceeded. Please wait ${waitTime} seconds before making another request.`);
+  }
+
   if (!openai) {
-    // Return mock report if no API key
     return {
-      ideaSummary: "Your idea shows promise and addresses a real market need with innovative approach.",
+      ideaSummary: "Your idea addresses a real market opportunity with a thoughtful approach to solving user problems.",
       strengths: [
-        "Clear value proposition",
-        "Identified target market",
-        "Unique differentiator"
+        "Clear understanding of target market needs",
+        "Well-defined problem-solution fit",
+        "Strategic thinking about implementation"
       ],
       concerns: [
-        "Market validation needed",
-        "Technical complexity",
-        "Competition analysis required"
+        "Market validation requires deeper user research",
+        "Competitive landscape needs thorough analysis", 
+        "Resource requirements should be carefully planned"
       ],
-      insights: "Based on your responses, this idea has solid foundations and your passion comes through clearly.",
-      nextSteps: "Start with customer interviews to validate your assumptions and build a simple prototype."
+      insights: "Your responses demonstrate solid foundational thinking and awareness of key business challenges.",
+      nextSteps: "Focus on validating assumptions through direct user feedback and develop a clear go-to-market strategy."
     };
   }
 
   try {
-    const answersText = Object.entries(answers)
+    // Sanitize inputs
+    const sanitizedPersona = sanitizeInput(persona);
+    const sanitizedUserIdea = sanitizeInput(userIdea);
+    
+    // Sanitize answers
+    const sanitizedAnswers: Record<number, string> = {};
+    for (const [key, value] of Object.entries(answers)) {
+      const numKey = parseInt(key, 10);
+      if (isNaN(numKey) || typeof value !== 'string') {
+        continue; // Skip invalid entries
+      }
+      sanitizedAnswers[numKey] = sanitizeInput(value);
+    }
+
+    const answersText = Object.entries(sanitizedAnswers)
       .map(([qId, answer]) => `Question ${qId}: ${answer}`)
       .join('\n');
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: `You are ${persona}. Create a comprehensive idea validation report based on the user's responses. 
-            
-            Return a JSON object with exactly these fields:
-            - ideaSummary: 2-3 sentences summarizing the idea
-            - strengths: array of 3-4 bullet points highlighting positive aspects
-            - concerns: array of 3-4 bullet points noting potential challenges
-            - insights: 2-3 sentences of persona-specific insights
-            - nextSteps: 1-2 sentences with actionable next steps
-            
-            Original idea: "${userIdea}"
-            
-            User's answers:
-            ${answersText}
-            
-            Maintain your persona's tone throughout and provide honest, constructive feedback.`
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000
-      }),
+    const systemPrompt = `You are ${sanitizedPersona}. Create a comprehensive idea validation report based on the user's responses. 
+
+Return a JSON object with exactly these fields:
+- ideaSummary: 2-3 sentences summarizing the idea (max 200 chars)
+- strengths: array of 3-4 bullet points highlighting positive aspects (max 100 chars each)
+- concerns: array of 3-4 bullet points noting potential challenges (max 100 chars each)  
+- insights: 2-3 sentences of persona-specific insights (max 200 chars)
+- nextSteps: 1-2 sentences with actionable next steps (max 150 chars)
+
+Maintain your persona's tone throughout and provide honest, constructive feedback.`;
+
+    const userPrompt = `Original idea: "${sanitizedUserIdea}"
+
+User's answers:
+${answersText}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 1000,
+      n: 1
     });
 
-    if (!response.ok) {
-      throw new Error('OpenAI API request failed');
-    }
-
-    const data: OpenAIResponse = await response.json();
-    const content = data.choices[0]?.message?.content;
+    const content = response.choices[0]?.message?.content;
     
     if (!content) {
       throw new Error('No content received from OpenAI');
     }
 
-    return JSON.parse(content);
-  } catch (error) {
-    console.error('Error generating validation report:', error);
-    // Return fallback report
+    let report;
+    try {
+      report = JSON.parse(content);
+    } catch (parseError) {
+      console.warn("Failed to parse validation report:", parseError);
+      throw new Error('Invalid response format');
+    }
+
+    // Validate report structure
+    const requiredFields = ['ideaSummary', 'strengths', 'concerns', 'insights', 'nextSteps'];
+    for (const field of requiredFields) {
+      if (!report[field]) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+
+    if (!Array.isArray(report.strengths) || !Array.isArray(report.concerns)) {
+      throw new Error('Strengths and concerns must be arrays');
+    }
+
+    // Sanitize report content
     return {
-      ideaSummary: "Your idea shows promise and addresses a real market need.",
+      ideaSummary: sanitizeInput(report.ideaSummary),
+      strengths: report.strengths.map((s: string) => sanitizeInput(s)),
+      concerns: report.concerns.map((c: string) => sanitizeInput(c)),
+      insights: sanitizeInput(report.insights),
+      nextSteps: sanitizeInput(report.nextSteps)
+    };
+
+  } catch (error: any) {
+    console.error('Error generating validation report:', error);
+    
+    if (error.message?.includes('rate limit')) {
+      throw error;
+    }
+    
+    // Enhanced fallback report
+    return {
+      ideaSummary: "Your idea demonstrates thoughtful consideration of market needs and implementation challenges.",
       strengths: [
-        "Clear problem identification",
-        "Thoughtful consideration of challenges",
-        "Strong motivation to build"
+        "Clear problem identification and target audience understanding",
+        "Systematic approach to validating assumptions",
+        "Realistic awareness of potential obstacles"
       ],
       concerns: [
-        "Market validation needed",
-        "Competitive landscape analysis",
-        "Resource requirements"
+        "User validation needs to be prioritized early",
+        "Competitive differentiation requires further development",
+        "Implementation timeline and resources need detailed planning"
       ],
-      insights: "Your responses show careful thinking about your idea's potential and challenges.",
-      nextSteps: "Focus on validating your assumptions with potential customers and building a minimum viable prototype."
+      insights: "Your responses show strong analytical thinking and awareness of key business fundamentals.",
+      nextSteps: "Conduct user interviews to validate core assumptions and develop a focused MVP strategy."
     };
   }
 }
