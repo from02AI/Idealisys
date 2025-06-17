@@ -13,7 +13,7 @@ interface Question2ScreenProps {
   onBack: () => void;
 }
 
-const Question2Screen: React.FC<Question2ScreenProps> = ({
+const Q2scr: React.FC<Question2ScreenProps> = ({
   currentStep,
   totalSteps,
   advisor,
@@ -196,4 +196,4 @@ const Question2Screen: React.FC<Question2ScreenProps> = ({
   );
 };
 
-export default Question2Screen;
+export default Q2scr;

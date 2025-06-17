@@ -15,7 +15,7 @@ interface QuestionScreenProps {
   onBack: () => void;
 }
 
-const Question3Screen: React.FC<QuestionScreenProps> = ({
+const Q3scr: React.FC<QuestionScreenProps> = ({
   question,
   currentStep,
   totalSteps,
@@ -247,4 +247,4 @@ const Question3Screen: React.FC<QuestionScreenProps> = ({
   );
 };
 
-export default Question3Screen; 
+export default Q3scr; 
