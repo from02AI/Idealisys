@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import QuestionScreen from './QuestionScreen';
-import Question1Screen from './Question1Screen';
-import Question2Screen from './Question2Screen';
-import Question3Screen from './Question3Screen';
+import Q1scr from './Q1scr';
+import Q2scr from './Q2scr';
+import Q3scr from './Q3scr';
+import Q4scr from './Q4scr';
+import Q5scr from './Q5scr';
 import { Question, AdvisorPersona } from '../types';
 import { getQuestionById, QUESTIONS } from '../data/questions';
 import { getAdvisorById } from '../data/advisors';
@@ -109,7 +111,7 @@ const QuestionFlowContainer: React.FC = () => {
   // Render different screens based on current step
   if (currentStep === 1) {
     return (
-      <Question1Screen
+      <Q1scr
         question={question}
         currentStep={currentStep}
         totalSteps={totalSteps}
@@ -121,7 +123,7 @@ const QuestionFlowContainer: React.FC = () => {
     );
   } else if (currentStep === 2) {
     return (
-      <Question2Screen
+      <Q2scr
         currentStep={currentStep}
         totalSteps={totalSteps}
         advisor={advisor}
@@ -132,12 +134,37 @@ const QuestionFlowContainer: React.FC = () => {
     );
   } else if (currentStep === 3) {
     return (
-      <Question3Screen
+      <Q3scr
         question={question}
         currentStep={currentStep}
         totalSteps={totalSteps}
         advisor={advisor}
         userIdea={initialUserIdea}
+        onAnswer={handleAnswer}
+        onBack={handleBack}
+      />
+    );
+  } else if (currentStep === 4) {
+    return (
+      <Q4scr
+        question={question}
+        currentStep={currentStep}
+        totalSteps={totalSteps}
+        advisor={advisor}
+        userIdea={initialUserIdea}
+        onAnswer={handleAnswer}
+        onBack={handleBack}
+      />
+    );
+  } else if (currentStep === 5) {
+    return (
+      <Q5scr
+        question={question}
+        currentStep={currentStep}
+        totalSteps={totalSteps}
+        advisor={advisor}
+        userIdea={initialUserIdea}
+        allAnswers={allAnswers}
         onAnswer={handleAnswer}
         onBack={handleBack}
       />
