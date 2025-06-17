@@ -1,77 +1,95 @@
 
 /**
- * Environment configuration utility with security validations
+ * Secure environment configuration utility
  */
 
 interface EnvironmentConfig {
   isDevelopment: boolean;
   isProduction: boolean;
-  apiKeys: {
-    openai: string | null;
+  features: {
+    debugMode: boolean;
+    errorReporting: boolean;
   };
 }
 
-// Validate environment variables
+// Validate environment variables (no sensitive data)
 const validateEnvironment = (): EnvironmentConfig => {
   const isDevelopment = import.meta.env.DEV;
   const isProduction = import.meta.env.PROD;
 
-  // Validate OpenAI API key
-  let openaiKey: string | null = null;
-  const rawOpenaiKey = import.meta.env.VITE_OPENAI_API_KEY;
-
-  if (rawOpenaiKey) {
-    // Clean and validate the key
-    const cleanedKey = rawOpenaiKey.replace(/[\n\r\s]/g, '');
-    
-    if (cleanedKey.startsWith('sk-') && cleanedKey.length > 20) {
-      openaiKey = cleanedKey;
-    } else {
-      console.error('Invalid OpenAI API key format detected');
-    }
-  }
-
-  // Log environment status in development
+  // Log environment status in development only
   if (isDevelopment) {
     console.group('🔧 Environment Configuration');
     console.log('Mode:', isDevelopment ? 'Development' : 'Production');
-    console.log('OpenAI API Key:', openaiKey ? '✓ Valid' : '✗ Missing/Invalid');
-    
-    if (!openaiKey) {
-      console.warn('⚠️  Set VITE_OPENAI_API_KEY environment variable for full functionality');
-    }
-    
+    console.log('Debug Mode:', isDevelopment);
+    console.log('Error Reporting:', isProduction);
     console.groupEnd();
   }
 
   return {
     isDevelopment,
     isProduction,
-    apiKeys: {
-      openai: openaiKey
+    features: {
+      debugMode: isDevelopment,
+      errorReporting: isProduction
     }
   };
 };
 
-// Export validated environment configuration
+// Export validated environment configuration (no API keys)
 export const env = validateEnvironment();
-
-// Helper functions for secure environment checks
-export const hasValidOpenAIKey = (): boolean => {
-  return env.apiKeys.openai !== null;
-};
-
-export const getOpenAIKey = (): string | null => {
-  return env.apiKeys.openai;
-};
 
 // Security headers for API requests
 export const getSecureHeaders = (): Record<string, string> => {
   return {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
-    // Add CSP headers for additional security
     'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY'
+    'X-Frame-Options': 'DENY',
+    'X-XSS-Protection': '1; mode=block'
   };
+};
+
+// Secure configuration helpers
+export const isDebugMode = (): boolean => {
+  return env.features.debugMode;
+};
+
+export const shouldReportErrors = (): boolean => {
+  return env.features.errorReporting;
+};
+
+// Helper to validate external URLs
+export const isValidExternalUrl = (url: string): boolean => {
+  try {
+    const parsed = new URL(url);
+    const allowedProtocols = ['https:', 'http:'];
+    const allowedDomains = [
+      'api.openai.com',
+      'api.anthropic.com', 
+      'docs.lovable.dev'
+    ];
+    
+    return allowedProtocols.includes(parsed.protocol) &&
+           allowedDomains.some(domain => parsed.hostname.endsWith(domain));
+  } catch {
+    return false;
+  }
+};
+
+// Content Security Policy helpers
+export const getCSPDirectives = (): string => {
+  const directives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "connect-src 'self' https://api.openai.com",
+    "font-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ];
+  
+  return directives.join('; ');
 };
