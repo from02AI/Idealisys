@@ -1,143 +1,89 @@
 
-// Secure OpenAI service with input validation and sanitization
+// Secure OpenAI service with enhanced security measures
 import { createAPIError, createNetworkError, ErrorLogger } from '../utils/errorHandling';
+import { sanitizeInput, validateInput, SECURITY_CONFIG } from '../utils/security';
+import { secureApiCall } from '../utils/secureApiClient';
 
 const logger = ErrorLogger.getInstance();
 
-// Input sanitization utilities
-const sanitizeInput = (input: string): string => {
-  // Remove potential XSS vectors and normalize whitespace
-  return input
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<[^>]*>/g, '')
-    .replace(/javascript:/gi, '')
-    .replace(/on\w+\s*=/gi, '')
-    .trim()
-    .slice(0, 2000); // Limit input length
-};
-
-const validateInput = (input: string): boolean => {
-  if (!input || typeof input !== 'string') return false;
-  if (input.length < 3 || input.length > 2000) return false;
-  // Check for suspicious patterns
-  const suspiciousPatterns = [
-    /eval\s*\(/i,
-    /function\s*\(/i,
-    /setTimeout\s*\(/i,
-    /setInterval\s*\(/i,
-    /<iframe/i,
-    /<object/i,
-    /<embed/i
-  ];
-  return !suspiciousPatterns.some(pattern => pattern.test(input));
-};
-
-// Secure API helper with rate limiting tracking
-class APIRateLimiter {
-  private requestCounts: Map<string, { count: number; resetTime: number }> = new Map();
-  private readonly maxRequests = 10;
-  private readonly windowMs = 60000; // 1 minute
-
-  canMakeRequest(endpoint: string): boolean {
-    const now = Date.now();
-    const key = `openai_${endpoint}`;
-    const current = this.requestCounts.get(key);
-
-    if (!current || now > current.resetTime) {
-      this.requestCounts.set(key, { count: 1, resetTime: now + this.windowMs });
-      return true;
-    }
-
-    if (current.count >= this.maxRequests) {
-      return false;
-    }
-
-    current.count++;
-    return true;
-  }
-}
-
-const rateLimiter = new APIRateLimiter();
-
-async function callOpenAIApi(messages: any[], options: Record<string, any> = {}): Promise<any> {
-  // Rate limiting check
-  if (!rateLimiter.canMakeRequest('chat')) {
-    throw createAPIError(
-      'Rate limit exceeded. Please wait before making another request.',
-      'RATE_LIMIT_EXCEEDED',
-      429
-    );
+// Enhanced message validation
+const validateMessages = (messages: any[]): { isValid: boolean; error?: string } => {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return { isValid: false, error: 'Messages must be a non-empty array' };
   }
 
-  // Validate and sanitize messages
-  const sanitizedMessages = messages.map(msg => ({
+  for (const msg of messages) {
+    if (!msg.role || !msg.content) {
+      return { isValid: false, error: 'Each message must have role and content' };
+    }
+
+    if (typeof msg.content === 'string') {
+      const validation = validateInput(msg.content);
+      if (!validation.isValid) {
+        return validation;
+      }
+    }
+  }
+
+  return { isValid: true };
+};
+
+// Sanitize messages array
+const sanitizeMessages = (messages: any[]): any[] => {
+  return messages.map(msg => ({
     ...msg,
     content: typeof msg.content === 'string' ? sanitizeInput(msg.content) : msg.content
   }));
+};
 
-  // Validate all message content
-  for (const msg of sanitizedMessages) {
-    if (typeof msg.content === 'string' && !validateInput(msg.content)) {
-      throw createAPIError(
-        'Invalid input detected. Please check your message and try again.',
-        'INVALID_INPUT',
-        400
-      );
-    }
+async function callOpenAIApi(messages: any[], options: Record<string, any> = {}): Promise<any> {
+  // Validate messages
+  const messageValidation = validateMessages(messages);
+  if (!messageValidation.isValid) {
+    throw createAPIError(
+      messageValidation.error || 'Invalid messages provided',
+      'INVALID_MESSAGES',
+      400
+    );
   }
 
+  // Sanitize messages
+  const sanitizedMessages = sanitizeMessages(messages);
+
+  // Prepare safe request options
+  const safeOptions = {
+    messages: sanitizedMessages,
+    model: options.model || 'gpt-4o-mini',
+    temperature: Math.max(0, Math.min(options.temperature || 0.7, 1)),
+    max_tokens: Math.max(1, Math.min(options.max_tokens || 1000, 2000)),
+    ...(options.response_format && { response_format: options.response_format })
+  };
+
+  console.log(`[Secure API] Making request with ${sanitizedMessages.length} messages`);
+
   try {
-    const response = await fetch('/api/openai', {
+    return await secureApiCall('/api/openai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Content-Type-Options': 'nosniff',
-      },
-      body: JSON.stringify({ 
-        messages: sanitizedMessages, 
-        ...options,
-        // Ensure safe defaults
-        max_tokens: Math.min(options.max_tokens || 1000, 2000),
-        temperature: Math.max(0, Math.min(options.temperature || 0.7, 1))
-      }),
+      body: safeOptions,
+      timeout: 30000
     });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'API request failed' }));
-      
-      if (response.status === 429) {
-        throw createAPIError(
-          'Rate limit exceeded. Please wait before trying again.',
-          'RATE_LIMIT_EXCEEDED',
-          429
-        );
-      }
-      
-      throw createNetworkError(
-        errorData.error || `API request failed with status ${response.status}`,
-        response.status
-      );
-    }
-
-    return response.json();
   } catch (error) {
-    logger.logError(error as Error, { endpoint: 'openai', messagesCount: messages.length });
-    
-    if (error instanceof Error && error.name.includes('TypeError')) {
-      throw createNetworkError('Network connection failed. Please check your internet connection.', 0);
-    }
-    
+    logger.logError(error as Error, { 
+      endpoint: 'openai', 
+      messagesCount: messages.length,
+      model: safeOptions.model
+    });
     throw error;
   }
 }
 
 export async function generateQuestionOptions(userIdea: string): Promise<string[]> {
-  console.log(`[Secure] Requesting question options for sanitized idea`);
+  console.log(`[Secure] Generating question options for sanitized input`);
 
   // Validate and sanitize input
-  if (!validateInput(userIdea)) {
-    console.warn('Invalid user idea provided, using fallback');
+  const validation = validateInput(userIdea);
+  if (!validation.isValid) {
+    console.warn('Invalid user idea provided, using fallback options');
     return [
       "Streamline daily tasks.",
       "Enhance personal productivity.", 
@@ -174,7 +120,10 @@ export async function generateQuestionOptions(userIdea: string): Promise<string[
       throw new Error('Invalid response format from API');
     }
     
-    return parsed.options.slice(0, 5); // Limit to 5 options max
+    // Sanitize and limit response options
+    return parsed.options
+      .map((option: string) => sanitizeInput(option))
+      .slice(0, 5);
   } catch (error) {
     logger.logError(error as Error, { function: 'generateQuestionOptions' });
     // Return secure fallback options
@@ -194,13 +143,14 @@ interface FetchFounderDoubtsParams {
 }
 
 export async function fetchFounderDoubts({ idea, audience, problem, solution }: FetchFounderDoubtsParams): Promise<string[]> {
-  console.log(`[Secure] Requesting founder doubts for sanitized inputs`);
+  console.log(`[Secure] Generating founder doubts for sanitized inputs`);
 
   // Validate all inputs
   const inputs = { idea, audience, problem, solution };
   for (const [key, value] of Object.entries(inputs)) {
-    if (!validateInput(value)) {
-      console.warn(`Invalid ${key} provided, using fallback`);
+    const validation = validateInput(value);
+    if (!validation.isValid) {
+      console.warn(`Invalid ${key} provided, using fallback doubts`);
       return [
         "Is the market large enough?",
         "Can we acquire users affordably?", 
@@ -246,7 +196,10 @@ export async function fetchFounderDoubts({ idea, audience, problem, solution }: 
       throw new Error('Invalid response format from API');
     }
     
-    return parsed.options.slice(0, 5); // Limit to 5 doubts max
+    // Sanitize and limit response options
+    return parsed.options
+      .map((doubt: string) => sanitizeInput(doubt))
+      .slice(0, 5);
   } catch (error) {
     logger.logError(error as Error, { function: 'fetchFounderDoubts' });
     // Return secure fallback options
