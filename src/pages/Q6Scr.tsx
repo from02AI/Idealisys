@@ -4,8 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { Question, AdvisorPersona } from '../types';
-import { generateQuestionOptions, fetchFounderDoubts } from '../services/openai'; // Updated import
+import { fetchFounderDoubts } from '../services/openai';
 import { Checkbox } from '@/components/ui/checkbox';
+import { sanitizeInput } from '../utils/validation';
+import { handleAsyncError, ErrorLogger, createValidationError } from '../utils/errorHandling';
 
 // Simple Heading component (could be a shared UI component)
 const Heading: React.FC<{ level: 1 | 2 | 3 | 4 | 5 | 6; children: React.ReactNode }> = ({ level, children }) => {
@@ -135,46 +137,66 @@ const Q6scr: React.FC<Q6scrProps> = ({
   const [takeaway, setTakeaway] = useState("");
   // -----------------------
 
-  const [aiDoubts, setAiDoubts] = useState<string[]>([]); // Renamed from aiCompetitors, now holds strings
+  const [aiDoubts, setAiDoubts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [kept, setKept] = useState<Set<number>>(new Set()); // Renamed from kept, still a Set of indices
+  const [kept, setKept] = useState<Set<number>>(new Set());
   const [showInput, setShowInput] = useState(false);
   const [draft, setDraft] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const errorLogger = ErrorLogger.getInstance();
 
   useEffect(() => {
     const loadDoubts = async () => {
       setLoading(true);
+      setError(null);
+      
       try {
-        const audience = allAnswers[2] || "general audience"; // Get audience from Q2 answer
-        const problem = allAnswers[3] || "unspecified problem"; // Get problem from Q3 answer
-        const solution = allAnswers[4] || "unspecified solution"; // New: Get solution from Q4 answer
+        const audience = allAnswers[2] || "general audience";
+        const problem = allAnswers[3] || "unspecified problem";
+        const solution = allAnswers[4] || "unspecified solution";
 
-        // Use the new fetchFounderDoubts function
-        const generatedDoubts = await fetchFounderDoubts({
-          idea: userIdea,
-          audience,
-          problem,
-          solution
-        });
-        setAiDoubts(generatedDoubts); // Assume fetchFounderDoubts returns string[]
-      } catch (error) {
-        console.error('Error loading doubt options:', error);
-        // Fallback options
-        setAiDoubts([
-          "Is the market big enough?",
-          "Can we build this with our current resources?",
-          "Will users adopt a new habit?",
-          "What if a large competitor enters the space?",
-          "Are our assumptions about the problem correct?",
-        ]);
+        const sanitizedContext = {
+          idea: sanitizeInput(userIdea, 500),
+          audience: sanitizeInput(audience, 200),
+          problem: sanitizeInput(problem, 300),
+          solution: sanitizeInput(solution, 300)
+        };
+
+        const generatedDoubts = await handleAsyncError(
+          () => fetchFounderDoubts(sanitizedContext),
+          [
+            "Is the market large enough to sustain this business?",
+            "Do we have the technical resources to build this effectively?", 
+            "Will users change their existing habits to adopt our solution?",
+            "How will we compete against established players in this space?",
+            "Are our core assumptions about the problem validated by real users?"
+          ],
+          'Failed to generate founder doubts'
+        );
+        
+        setAiDoubts(generatedDoubts);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+        setError(errorMessage);
+        errorLogger.logError(
+          err instanceof Error ? err : new Error('Unknown error in loadDoubts'),
+          { userIdea, allAnswers }
+        );
       }
+      
       setLoading(false);
     };
 
     loadDoubts();
-  }, [userIdea, allAnswers]); // Re-fetch if userIdea or previous answers change
+  }, [userIdea, allAnswers]);
 
   const toggleKeep = (index: number) => {
+    if (index < 0 || index >= aiDoubts.length) {
+      errorLogger.logError(createValidationError('index', 'Invalid doubt index'));
+      return;
+    }
+
     setKept(prevKept => {
       const newKept = new Set(prevKept);
       if (newKept.has(index)) {
@@ -188,41 +210,91 @@ const Q6scr: React.FC<Q6scrProps> = ({
 
   const addDraft = (e: React.FormEvent) => {
     e.preventDefault();
-    if (draft.trim()) {
+    
+    try {
+      const sanitizedDraft = sanitizeInput(draft, 150);
+      
+      if (sanitizedDraft.length < 5) {
+        setError('Doubt must be at least 5 characters long');
+        return;
+      }
+
       setAiDoubts(prevDoubts => {
-        const newDoubts = [...prevDoubts, draft.trim()];
+        const newDoubts = [...prevDoubts, sanitizedDraft];
         setKept(prevKept => {
           const updatedKept = new Set(prevKept);
-          updatedKept.add(newDoubts.length - 1); // Keep the newly added doubt
+          updatedKept.add(newDoubts.length - 1);
           return updatedKept;
         });
         return newDoubts;
       });
+      
       setDraft("");
       setShowInput(false);
+      setError(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Invalid input';
+      setError(errorMessage);
+      errorLogger.logError(
+        err instanceof Error ? err : new Error('Validation error in addDraft'),
+        { draft }
+      );
     }
   };
 
   const handleSubmit = () => {
-    const selectedDoubts = Array.from(kept).map(index => aiDoubts[index]);
-    
-    // Submission payload as per prompt
-    const payload = {
-      talked_to_users: spoken === "yes",
-      interview_takeaway: spoken === "yes" ? takeaway.trim() : "",
-      open_doubts: selectedDoubts,
-    };
+    try {
+      if (spoken === null) {
+        setError('Please indicate whether you have talked to users');
+        return;
+      }
 
-    // Assuming onAnswer can now take an object or needs to be stringified
-    onAnswer(JSON.stringify(payload), false); // Sending as non-AI generated since user input is involved
+      if (kept.size < 1) {
+        setError('Please select at least one doubt');
+        return;
+      }
+
+      const selectedDoubts = Array.from(kept)
+        .filter(index => index >= 0 && index < aiDoubts.length)
+        .map(index => aiDoubts[index]);
+
+      const sanitizedTakeaway = takeaway.trim() ? sanitizeInput(takeaway, 150) : "";
+
+      const payload = {
+        talked_to_users: spoken === "yes",
+        interview_takeaway: spoken === "yes" ? sanitizedTakeaway : "",
+        open_doubts: selectedDoubts,
+      };
+
+      onAnswer(JSON.stringify(payload), false);
+      setError(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Submission error';
+      setError(errorMessage);
+      errorLogger.logError(
+        err instanceof Error ? err : new Error('Error in handleSubmit'),
+        { spoken, takeaway: takeaway.slice(0, 50), selectedDoubts: kept.size }
+      );
+    }
   };
 
   // Validation rule
   const isReadyForNext = spoken !== null && kept.size >= 1;
 
-  const getTipText = () => {
-    // Tip adjustment as per prompt
-    return "Direct = same job. Alternative = any substitute."; // Keep this, or change if a new tip is desired for Q6
+  const handleTakeawayChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    if (value.length <= 150) {
+      setTakeaway(value);
+      setError(null);
+    }
+  };
+
+  const handleDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value.length <= 150) {
+      setDraft(value);
+      setError(null);
+    }
   };
 
   return (
@@ -252,8 +324,14 @@ const Q6scr: React.FC<Q6scrProps> = ({
         </div>
 
         <h2 className="text-xl md:text-2xl font-bold text-gray-800 mt-6 mb-6 text-center">
-          Validation & doubts {/* Updated title */}
+          Validation & doubts
         </h2>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
 
         <div className="animate-fade-in flex flex-col flex-grow overflow-y-auto hide-scrollbar">
           {/* NEW SECTION: Have you talked to users? */}
@@ -268,7 +346,7 @@ const Q6scr: React.FC<Q6scrProps> = ({
           {spoken === "yes" && (
             <Textarea
               value={takeaway}
-              onChange={e => setTakeaway(e.target.value)}
+              onChange={handleTakeawayChange}
               maxLength={150}
               placeholder="Key takeaway (optional)"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none transition-colors mb-6"
@@ -307,7 +385,8 @@ const Q6scr: React.FC<Q6scrProps> = ({
                     <form onSubmit={addDraft} className="w-full">
                       <Input
                         value={draft}
-                        onChange={e => setDraft(e.target.value)}
+                        onChange={handleDraftChange}
+                        maxLength={150}
                         placeholder="Type your doubt, hit Enter"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                       />
@@ -315,20 +394,7 @@ const Q6scr: React.FC<Q6scrProps> = ({
                   )}
                 </div>
               </div>
-              <div className="max-w-md mx-auto mt-4">
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-2.5">
-                  <div className="flex items-start space-x-2">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-blue-700 leading-relaxed text-left">
-                      <strong>Tip:</strong> {getTipText()}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <TipCard text="Direct = same job. Alternative = any substitute." />
             </>
           )}
         </div>
@@ -346,4 +412,4 @@ const Q6scr: React.FC<Q6scrProps> = ({
   );
 };
 
-export default Q6scr; 
+export default Q6scr;
